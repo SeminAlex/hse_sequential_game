@@ -1,1 +1,1 @@
-# hse_sequential_game
+# HSE Sequenti@l g@mes
