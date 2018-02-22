@@ -9,8 +9,9 @@ N = 10
 M = 12
 
 
-def _create_zero_line():
-    return [0 for _ in range(self.weight_, self.height_)]
+def _create_zero_line(length):
+    return [0 for _ in range(length)]
+
 
 class Status(Enum):
     win = 1
@@ -57,7 +58,8 @@ class Game:
             self.__generate_field(units)
 
     def __generate_field(self, units=None):
-        self.field_ = [_create_zero_line() for _ in range(self.FEATURE_NUM)]
+        length = self.weight_ * self.height_
+        self.field_ = [_create_zero_line(length) for _ in range(self.FEATURE_NUM)]
 
         if units:
             if len(units) < 1 or len(units[0]) != 2:
@@ -73,11 +75,21 @@ class Game:
         pass
 
 
-def genereate_units_array(number, player_percent):
+def genereate_units_array(number, player_percent, weight, height):
+    def indext2coordinate(index):
+        w = index // weight
+        h = index - weight * w
+        return w, h
 
-    pass
+    coord_inexes = sample(range(weight * height), number)
+    coordinates = [indext2coordinate(i) for i in coord_inexes]
+    ownership = [1 if i < number * player_percent else 0 for i in range(number)]
+    units = [(*coordinates[i], *sample(Units.keys(), 1), ownership[i]) for i in range(number)]
+    return units
 
 
-for i in range(1000):
-    print(sample(Units.keys(), 1), randrange(0, 2))
 game = Game()
+
+tmp = genereate_units_array(8, 0.5, 15, 11)
+print(tmp)
+game = Game(weight=15, height=11, units=tmp)
