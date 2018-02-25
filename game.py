@@ -62,16 +62,18 @@ class Game:
         self.field_ = [_create_zero_line(length) for _ in range(self.FEATURE_NUM)]
 
         if units:
-            if len(units) < 1 or len(units[0]) != 2:
+            if len(units) < 1 or len(units[0]) != 4:
                 raise Exception("ERROR: List of units must contain at least one tuple like (X, Y, UNIT_NAME, PLAYER)")
-            for unit_name, player in units:
-                attributes = Units.get(unit_name, default=None)
+            for x, y, unit_name, player in units:
+                attributes = Units.get(unit_name, None)
                 if not attributes:
                     raise Exception("ERROR: Unit with name {} doesn't exist. Possible unit names : {}"
                                     .format(unit_name, Units.keys()))
                 start = 1 + len(attributes) * player
+                coordinate = x * self.weight_ + y
+                self.field_[0][coordinate] = 1
                 for index in range(len(attributes)):
-                    self.field_[start + index] = attributes[index]
+                    self.field_[start + index][coordinate] = attributes[index]
         pass
 
 
@@ -90,6 +92,8 @@ def genereate_units_array(number, player_percent, weight, height):
 
 game = Game()
 
-tmp = genereate_units_array(8, 0.5, 15, 11)
+#tmp = genereate_units_array(8, 0.5, 15, 11)
+tmp =[(2, 3, 'slender_men', 1), (2, 13, 'slender_men', 1), (9, 13, 'slender_men', 1), (7, 9, 'archer', 1), (9, 9, 'archer', 0), (1, 3, 'slender_men', 0), (1, 4, 'archer', 0), (2, 8, 'archer', 0)]
 print(tmp)
 game = Game(weight=15, height=11, units=tmp)
+print(game)
