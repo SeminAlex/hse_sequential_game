@@ -76,6 +76,25 @@ class Game:
                     self.field_[start + index][coordinate] = attributes[index]
         pass
 
+    def fight(self, attacker, defender):
+        """
+        Emulate fight between units 'attacker' and 'defender'
+        :param attacker: int, position of unit who attack
+        :param defender: int, position of unit who defends
+        :return: False if attacker or defender are exist, True - otherwise
+        """
+
+        pass
+
+    def is_unit_exist(self, unit):
+        if self.field_[0][unit]:
+            # TODO: think about deleting of hardcodes
+            if self.field_[1][unit] or self.field_[15][unit]:
+                return True
+        return False
+
+
+
 
 def genereate_units_array(number, player_percent, weight, height):
     def indext2coordinate(index):
