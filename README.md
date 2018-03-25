@@ -1,1 +1,1 @@
-# HSE Sequenti@l g@mes
+# HSE Sequenti@l g@me
