@@ -44,10 +44,13 @@ Units = {
 }
 
 attributes = list(["attack", "defense", "damage", "life", "initiative", "speed", "range"])
-units_names = dict(map(lambda x:(x[1],x[0]), enumerate(Units.keys())))
+name2index = dict(map(lambda x:(x[1], x[0]), enumerate(Units.keys())))
+index2name = dict(enumerate(Units.keys()))
 
-print(units_names)
-etalon = len(attributes)
+
+names = list(name2index.keys())
+tmp = len(names)
+
 for i in Units:
-    if len(Units[i]) != etalon:
+    if len(Units[i]) != len(attributes):
         print("Unit - {}, length = {}".format(i, len(Units[i])))
