@@ -38,7 +38,7 @@ class Game:
     weight_       - int variable, shows weight of field
     FEATURE_NUM   - int variable, contain number of rows in field_ matrix
     status        - Status variable, can be any value from 'Status' class
-    units_        - array which determinate queue of units turns
+    units_        - (Name, Owner, Raw, Location) array which determinate queue of units turns
     """
 
     def __init__(self, height, weight, units=None, field=None):
@@ -81,20 +81,25 @@ class Game:
     def take_action(self, actions):
         """
         
-        :param actions: <list>, length = (self.height_ * self.weight_) * 2; first half of list is asosiated with
+        :param actions: <list>, length = (self.height_ * self.weight_) * 2; first half of list is associated with
                                                                             movements, second - with attack
         :return: <Game>, return new State of this game
         """
         actions = [actions[:self.height_ * self.weight_], actions[self.height_ * self.weight_:]]
         movement = actions[0].index(max(actions[0]))
-        unit_raw = self.field_[self.units_[0][3]]
-        curr_location = self.units_[0][4]
+        current_unit = self.units_[0]                   # (Name, Owner, Raw, Location)
+        unit_raw = self.field_[current_unit[2]]
 
         # make move
         if not self.is_free(movement):
             return None, Status.lose
-        unit_raw[curr_location], unit_raw[movement] = unit_raw[movement], unit_raw[curr_location]
+        unit_raw[current_unit[3]], unit_raw[movement] = unit_raw[movement], unit_raw[current_unit[3]]
         # make attack
+        defender_index = actions[1].index(max(actions[1]))
+        defender = (self.find_unit_raw(defender_index), defender_index)
+        att_total, def_total = self.fight(current_unit[2:], defender)
+        if att_total < 0 or def_total < 0:
+            raise Exception("fight method returned wrong values, att = {}, def = {}".format(att_total, def_total))
 
         pass
 
@@ -104,7 +109,8 @@ class Game:
                 return False
         return True
 
-    def make_move(self, raw, current, new_location):
+    @staticmethod
+    def make_move(raw, current, new_location):
         raw[current], raw[new_location] = raw[new_location], raw[current]
         pass
 
@@ -122,23 +128,51 @@ class Game:
 
     @staticmethod
     def calculate_damage(attacker, att_count, defender):
+        """
+        calculate damage that unit 'attacker' inflict to 'defender'
+        :param attacker: <int> index of unit that attack
+        :param att_count: <int> unit count in attack army
+        :param defender: <int> index of unit that defence
+        :return:
+        """
         attacker_name = cfg.index2name[attacker]
         defender_name = cfg.index2name[defender]
-        damage = cfg.Units[attacker_name][2]  # get damage
-        odds = cfg.Units[attacker_name][0] - cfg.Units[defender_name][1]  # difference between attack and defend
-        damage_coeff = (1.0 + 0.1 * sign(odds)) ** abs(odds)  # coefficient of damage
+        damage = cfg.Units[attacker_name][2]                                # get damage
+        odds = cfg.Units[attacker_name][0] - cfg.Units[defender_name][1]    # difference between attack and defend
+        damage_coeff = (1.0 + 0.1 * sign(odds)) ** abs(odds)                # coefficient of damage
         return damage * att_count * damage_coeff
+
+    def get_count(self, unit):
+        """
+        :param unit:(Unit name, Owner, Raw, Location)
+        :return: count of unit at this location
+        """
+        return self.field_[unit[2]][unit[3]]/cfg.Units[unit[0]]
 
     def fight(self, attacker, defender):
         """
         Emulate fight between units 'attacker' and 'defender'
-        :param attacker: (int, int), number of unit who attack and his position in the field
-        :param defender: (int, int), number of unit who defends and his position in the field
-        :return: (int: 'attacker' unit counts after attack, int: 'defender' unit counts after attack ) 
+        :param attacker: (<int> raw, <int> location), number of unit who attack and his position in the field
+        :param defender: (<int> raw, <int> location), number of unit who defends and his position in the field
+        :return: (<int>: 'attacker' unit total life after attack, <int>: 'defender' unit total life after attack )
         """
-        # TODO: calculate damage
-        # TODO: calculate results units count in both army
-        pass
+        att_count = self.get_count(self.units_[0])
+        def_count = self.get_count((cfg.index2name[defender[0]], None, defender[0], defender[1]))
+        # calculate total damage that unit 'attacker' inflict to 'defender'
+        damage = self.calculate_damage(attacker[0], att_count, defender[0])
+        damage = damage if damage > 1 else 1
+        att_total = self.field_[defender[0]][defender[1]] - damage
+        att_total = att_total if att_total > 0 else 0
+
+        # calculate total damage that unit 'defender' inflict to 'attacker'
+        def_total = 0
+        if att_total != 0:
+            damage = self.calculate_damage(defender[0], def_count, attacker[0])
+            damage = damage if damage > 1 else 1
+            def_total = self.field_[attacker[0]][attacker[1]] - damage
+            def_total = def_total if def_total > 0 else 0
+
+        return att_total, def_total
 
 
 def genereate_units_array(number, player_percent, weight, height):
