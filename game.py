@@ -20,9 +20,9 @@ class Status(Enum):
 
 
 class Game:
-    __slots__ = ["field_", "player_", "units_", "height_", "weight_", "FEATURE_NUM", "status", ]
+    __slots__ = ["field_", "player_", "units_", "height_", "width_", "FEATURE_NUM", "status", ]
     """
-    field_ - matrix: FEATURE_NUM x (height*weight), where each row has length= height*weight
+    field_ - matrix: FEATURE_NUM x (height*width), where each row has length= height*width
               field_[0-(FEATURE_NUM-1)] - integer arrays, K in raw i means, that unit, which name is unit_names[i] is 
                                           located in this cell, its total life is K and it is all units of FIRST player
               field_[FEATURE_NUM-(FEATURE_NUM*2-1)] - integer arrays, same as previous but for SECOND player
@@ -35,7 +35,7 @@ class Game:
     
     player_       - binary variable that indicate which turn is now
     height_       - int variable, shows height of field
-    weight_       - int variable, shows weight of field
+    width_       - int variable, shows weight of field
     FEATURE_NUM   - int variable, contain number of rows in field_ matrix
     status        - Status variable, can be any value from 'Status' class
     units_        - (Name, Owner, Raw, Location) array which determinate queue of units turns
@@ -43,7 +43,7 @@ class Game:
 
     def __init__(self, height, weight, units=None, field=None):
         self.height_ = height
-        self.weight_ = weight
+        self.width_ = weight
         self.FEATURE_NUM = len(cfg.name2index)
         self.status = Status.not_ended
         if field:
@@ -53,7 +53,7 @@ class Game:
         self.units_ = deque(*self.units_sort_())
 
     def __generate_field(self, units=None):
-        length = self.weight_ * self.height_
+        length = self.width_ * self.height_
         self.field_ = [_create_zero_line(length) for _ in range(self.FEATURE_NUM * 2 + 3)]
 
         if units:
@@ -66,7 +66,7 @@ class Game:
                     raise Exception("ERROR: Unit with name {} doesn't exist. Possible unit names : {}"
                                     .format(unit_name, cfg.Units.keys()))
                 raw = cfg.name2index[unit_name] + self.FEATURE_NUM * player
-                coordinate = x * self.weight_ + y
+                coordinate = x * self.width_ + y
                 self.field_[raw][coordinate] = cfg.Units[unit_name][3] * count
         return
 
@@ -81,13 +81,13 @@ class Game:
     def take_action(self, actions):
         """
         
-        :param actions: <list>, length = (self.height_ * self.weight_) * 2; first half of list is associated with
+        :param actions: <list>, length = (self.height_ * self.width_) * 2; first half of list is associated with
                                                                             movements, second - with attack
         :return: <Game>, return new State of this game
         """
-        actions = [actions[:self.height_ * self.weight_], actions[self.height_ * self.weight_:]]
+        actions = [actions[:self.height_ * self.width_], actions[self.height_ * self.width_:]]
         movement = actions[0].index(max(actions[0]))
-        current_unit = self.units_[0]                   # (Name, Owner, Raw, Location)
+        current_unit = self.units_[0]  # (Name, Owner, Raw, Location)
         unit_raw = self.field_[current_unit[2]]
 
         # make move
@@ -108,6 +108,19 @@ class Game:
             if self.field_[i][location] != 0:
                 return False
         return True
+
+    def possible_movements(self):
+        unit = self.units_[0]
+        location = unit[3]
+        speed = cfg.Units[unit[0]][5]
+        diapason = cfg.Units[unit[0]][6]
+        raw = location // self.width_
+        column = location - self.width_ * raw
+        for raw_index in range(raw - speed, raw + speed):
+            if 0 <= raw_index < self.height_ :
+                for column_index in range(column-speed, column+speed):
+                    if 0 <= column_index < self.width_:
+                        print((raw_index, column_index, raw_index*self.width_+column_index))
 
     @staticmethod
     def make_move(raw, current, new_location):
@@ -137,9 +150,9 @@ class Game:
         """
         attacker_name = cfg.index2name[attacker]
         defender_name = cfg.index2name[defender]
-        damage = cfg.Units[attacker_name][2]                                # get damage
-        odds = cfg.Units[attacker_name][0] - cfg.Units[defender_name][1]    # difference between attack and defend
-        damage_coeff = (1.0 + 0.1 * sign(odds)) ** abs(odds)                # coefficient of damage
+        damage = cfg.Units[attacker_name][2]  # get damage
+        odds = cfg.Units[attacker_name][0] - cfg.Units[defender_name][1]  # difference between attack and defend
+        damage_coeff = (1.0 + 0.1 * sign(odds)) ** abs(odds)  # coefficient of damage
         return damage * att_count * damage_coeff
 
     def get_count(self, unit):
@@ -147,7 +160,7 @@ class Game:
         :param unit:(Unit name, Owner, Raw, Location)
         :return: count of unit at this location
         """
-        return self.field_[unit[2]][unit[3]]/cfg.Units[unit[0]]
+        return self.field_[unit[2]][unit[3]] / cfg.Units[unit[0]]
 
     def fight(self, attacker, defender):
         """
@@ -201,3 +214,4 @@ print(game.units_sort_())
 print(game.units_)
 game.units_.append(game.units_[0])
 print(game.units_)
+game.possible_movements()
