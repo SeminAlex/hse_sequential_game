@@ -109,6 +109,35 @@ class Game:
                 return False
         return True
 
+    def fill_actions(self):
+        unit = self.units_[0]
+        location = unit[3]
+        speed = cfg.Units[unit[0]][5]
+        diapason = cfg.Units[unit[0]][6]
+        raw = location // self.width_
+        column = location - self.width_ * raw
+        moveRaw = self.FEATURE_NUM * 2
+        attackRaw = moveRaw + 1
+        moveAttackRaw = attackRaw + 1
+        for i in range(len(self.field_[0])):
+            self.field_[moveRaw][i] = 0
+            self.field_[attackRaw][i] = 0
+            self.field_[moveAttackRaw][i] = 0
+            raw_i = i // self.width_
+            col_i = i - self.width_ * raw_i
+
+            if self.is_free(i):
+                if raw - speed <= raw_i < raw + speed and column - speed <= col_i < column + speed:
+                    self.field_[moveRaw][i] = 1
+            else:
+                if raw - diapason <= raw_i < raw + diapason and column - diapason <= col_i < column + diapason:
+                    self.field_[attackRaw][i] = 1
+
+    def moveAttackMatrix(self):
+        
+
+
+
     def possible_movements(self):
         unit = self.units_[0]
         location = unit[3]
@@ -117,10 +146,10 @@ class Game:
         raw = location // self.width_
         column = location - self.width_ * raw
         for raw_index in range(raw - speed, raw + speed):
-            if 0 <= raw_index < self.height_ :
-                for column_index in range(column-speed, column+speed):
+            if 0 <= raw_index < self.height_:
+                for column_index in range(column - speed, column + speed):
                     if 0 <= column_index < self.width_:
-                        print((raw_index, column_index, raw_index*self.width_+column_index))
+                        print((raw_index, column_index, raw_index * self.width_ + column_index))
 
     @staticmethod
     def make_move(raw, current, new_location):
@@ -215,3 +244,4 @@ print(game.units_)
 game.units_.append(game.units_[0])
 print(game.units_)
 game.possible_movements()
+game.fill_actions()
