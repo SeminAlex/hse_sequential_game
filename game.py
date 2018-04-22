@@ -114,8 +114,7 @@ class Game:
         location = unit[3]
         speed = cfg.Units[unit[0]][5]
         diapason = cfg.Units[unit[0]][6]
-        raw = location // self.width_
-        column = location - self.width_ * raw
+        raw, column = self.get_raw_column(location)
         moveRaw = self.FEATURE_NUM * 2
         attackRaw = moveRaw + 1
         moveAttackRaw = attackRaw + 1
@@ -123,33 +122,55 @@ class Game:
             self.field_[moveRaw][i] = 0
             self.field_[attackRaw][i] = 0
             self.field_[moveAttackRaw][i] = 0
-            raw_i = i // self.width_
-            col_i = i - self.width_ * raw_i
+            raw_i, col_i = self.get_raw_column(i)
 
             if self.is_free(i):
-                if raw - speed <= raw_i < raw + speed and column - speed <= col_i < column + speed:
+                if self.in_moves(raw_i, col_i, raw, column, speed):
                     self.field_[moveRaw][i] = 1
             else:
-                if raw - diapason <= raw_i < raw + diapason and column - diapason <= col_i < column + diapason:
+                if self.in_range(raw_i, col_i, raw, column, diapason):
                     self.field_[attackRaw][i] = 1
 
     def moveAttackMatrix(self):
-        
+        def raw_creation(line):
+            result = [0] * length
+            raw = line // self.width_
+            column = line - self.width_ * raw
+            for i in range(length):
+                raw_i = i // self.width_
+                col_i = i - self.width_ * raw_i
+                if not self.is_free(i):
+                    if self.in_range(raw_i, col_i, raw, column, diapason):
+                        result[i] = 1
+            return result
 
-
-
-    def possible_movements(self):
         unit = self.units_[0]
-        location = unit[3]
         speed = cfg.Units[unit[0]][5]
         diapason = cfg.Units[unit[0]][6]
+        length = self.height_ * self.width_
+        location = unit[3]
+        raw, column = self.get_raw_column(location)
+
+        return [raw_creation(i)
+                if self.is_free(i) and self.in_moves(*self.get_raw_column(i), raw, column, speed) else [0] * length
+                for i in range(length)]
+
+    def get_raw_column(self, location):
         raw = location // self.width_
         column = location - self.width_ * raw
-        for raw_index in range(raw - speed, raw + speed):
-            if 0 <= raw_index < self.height_:
-                for column_index in range(column - speed, column + speed):
-                    if 0 <= column_index < self.width_:
-                        print((raw_index, column_index, raw_index * self.width_ + column_index))
+        return raw, column
+
+    @staticmethod
+    def in_moves(raw_to, col_to, raw, column, speed):
+        if raw - speed <= raw_to < raw + speed and column - speed <= col_to < column + speed:
+            return True
+        return False
+
+    @staticmethod
+    def in_range(raw_to, col_to, raw, column, diapason):
+        if raw - diapason <= raw_to < raw + diapason and column - diapason <= col_to < column + diapason:
+            return True
+        return False
 
     @staticmethod
     def make_move(raw, current, new_location):
@@ -243,5 +264,6 @@ print(game.units_sort_())
 print(game.units_)
 game.units_.append(game.units_[0])
 print(game.units_)
-game.possible_movements()
-game.fill_actions()
+
+m = game.moveAttackMatrix()
+print(game.moveAttackMatrix())
