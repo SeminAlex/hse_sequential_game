@@ -27,16 +27,14 @@ class Game:
                                           located in this cell, its total life is K and it is all units of FIRST player
               field_[FEATURE_NUM-(FEATURE_NUM*2-1)] - integer arrays, same as previous but for SECOND player
               field_[FEATURE_NUM*2]   - binary array, 1 means that current unit can move into this location
-              field_[FEATURE_NUM*2+1] - binary array, 1 means that current unit can attack enemy in this location
-              field_[FEATURE_NUM*2+2] - binary array, 1 means that current unit can attack enemy in this location, 
-                                        ONLY if current unit made movements
-              field_[FEATURE_NUM*2+3] - 
-                          
-    
+              field_[FEATURE_NUM*2+j] - binary array, 1 means that current unit can attack enemy in this location if he 
+                                            current unit made movements in location 'j-1'
+
+
     player_       - binary variable that indicate which turn is now
     height_       - int variable, shows height of field
-    width_       - int variable, shows weight of field
-    FEATURE_NUM   - int variable, contain number of rows in field_ matrix
+    width_        - int variable, shows width of field
+    FEATURE_NUM   - int variable, total number of all possible units
     status        - Status variable, can be any value from 'Status' class
     units_        - (Name, Owner, Raw, Location) array which determinate queue of units turns
     """
@@ -116,22 +114,16 @@ class Game:
         diapason = cfg.Units[unit[0]][6]
         raw, column = self.get_raw_column(location)
         moveRaw = self.FEATURE_NUM * 2
-        attackRaw = moveRaw + 1
-        moveAttackRaw = attackRaw + 1
+
         for i in range(len(self.field_[0])):
-            self.field_[moveRaw][i] = 0
-            self.field_[attackRaw][i] = 0
-            self.field_[moveAttackRaw][i] = 0
+            self.field_[moveRaw][i] = 1 if i == location else 0
             raw_i, col_i = self.get_raw_column(i)
 
-            if self.is_free(i):
-                if self.in_moves(raw_i, col_i, raw, column, speed):
-                    self.field_[moveRaw][i] = 1
-            else:
-                if self.in_range(raw_i, col_i, raw, column, diapason):
-                    self.field_[attackRaw][i] = 1
+            if self.is_free(i) and self.in_moves(raw_i, col_i, raw, column, speed):
+                self.field_[moveRaw][i] = 1
+        self.field_[moveRaw + 1:] = self.move_attack_matrix()
 
-    def moveAttackMatrix(self):
+    def move_attack_matrix(self):
         def raw_creation(line):
             result = [0] * length
             raw = line // self.width_
@@ -237,6 +229,10 @@ class Game:
 
         return att_total, def_total
 
+    def id(self):
+        id = str(self.FEATURE_NUM) + "&&" + str()
+        ";".join([",".join(map(str, line)) for line in self.field_])
+
 
 def genereate_units_array(number, player_percent, weight, height):
     def indext2coordinate(index):
@@ -264,6 +260,5 @@ print(game.units_sort_())
 print(game.units_)
 game.units_.append(game.units_[0])
 print(game.units_)
-
-m = game.moveAttackMatrix()
-print(game.moveAttackMatrix())
+game.fill_actions()
+print(game.move_attack_matrix())
