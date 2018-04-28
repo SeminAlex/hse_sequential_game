@@ -25,13 +25,19 @@ class GodHand(Enum):
     move = 0
     add = 1
 
+
 class Unit:
     __slots__ = ["name", "owner", "raw", "location"]
+
     def __init__(self, name, owner, raw, location):
         self.name = name
         self.owner = owner
         self.raw = raw
         self.location = location
+
+    @property
+    def position(self):
+        return self.raw, self.location
 
 
 class Game:
@@ -91,9 +97,9 @@ class Game:
                                             current unit made movements in location 'j-1'
         """
         unit = self.units_[0]
-        location = unit[3]
-        speed = cfg.Units[unit[0]][5]
-        diapason = cfg.Units[unit[0]][6]
+        location = unit.location
+        speed = cfg.Units[unit.name][5]
+        diapason = cfg.Units[unit.name][6]
         raw, column = self.get_raw_column(location)
         moveRaw = self.FEATURE_NUM * 2
         raw_length = len(self.field_[0])
@@ -114,7 +120,7 @@ class Game:
                 self.field_[i] = [0] * raw_length
                 if self.is_free(i) and self.can_move(new_raw, new_col, raw, column, speed):
                     for j in range(raw_length):
-                        search_range = (0, self.FEATURE_NUM) if unit[1] else (self.FEATURE_NUM, self.FEATURE_NUM * 2)
+                        search_range = (0, self.FEATURE_NUM) if unit.owner else (self.FEATURE_NUM, self.FEATURE_NUM * 2)
                         if not self.is_free(j, search_range) and self.in_range(*self.get_raw_column(j), new_raw,
                                                                                new_col, diapason):
                             self.field_[moveRaw + 1 + i][j] = 1
@@ -134,12 +140,12 @@ class Game:
             return result
 
         unit = self.units_[0]  # (Unit Name, Owner, raw, location)
-        speed = cfg.Units[unit[0]][5]
-        diapason = cfg.Units[unit[0]][6]
+        speed = cfg.Units[unit.name][5]
+        diapason = cfg.Units[unit.name][6]
         length = self.height_ * self.width_
-        location = unit[3]
+        location = unit.location
         raw, column = self.get_raw_column(location)
-        search_range = (0, self.FEATURE_NUM) if unit[1] else (self.FEATURE_NUM, self.FEATURE_NUM * 2)
+        search_range = (0, self.FEATURE_NUM) if unit.owner else (self.FEATURE_NUM, self.FEATURE_NUM * 2)
 
         return [raw_creation(i)
                 if self.is_free(i) and self.can_move(*self.get_raw_column(i), raw, column, speed) else [0] * length
@@ -155,13 +161,13 @@ class Game:
         :param unit:(Unit name, Owner, Raw, Location)
         :return: count of unit at this location
         """
-        return self.field_[unit[2]][unit[3]] / cfg.Units[unit[0]]
+        return self.field_[unit.raw][unit.location] / cfg.Units[unit.name]
 
     def units_sort_(self):
         """ return list of tuples (Unit Name, Owner, raw, location)"""
-        units_in_game = [(cfg.index2name[i % self.FEATURE_NUM], i // self.FEATURE_NUM, i, j)
+        units_in_game = [Unit(cfg.index2name[i % self.FEATURE_NUM], i // self.FEATURE_NUM, i, j)
                          for i in range(self.FEATURE_NUM * 2) for j in range(len(self.field_[i])) if self.field_[i][j]]
-        return sorted(units_in_game, key=lambda x: cfg.Units[x[0]][-3], reverse=True), len(units_in_game)
+        return sorted(units_in_game, key=lambda x: cfg.Units[x.name][-3], reverse=True), len(units_in_game)
 
     def check_winner(self, player):
         """
@@ -283,12 +289,12 @@ class Game:
         actions = [actions[:self.height_ * self.width_], actions[self.height_ * self.width_:]]
         movement = actions[0].index(max(actions[0]))
         current_unit = self.units_[0]  # (Name, Owner, Raw, Location)
-        unit_raw = self.field_[current_unit[2]]
-        player = current_unit[1]
-        current_location = current_unit[3]
+        unit_raw = self.field_[current_unit.raw]
+        player = current_unit.owner
+        current_location = current_unit.location
         location_raw, location_col = self.get_raw_column(current_location)
-        speed = cfg.Units[current_unit[0]][5]
-        distance = cfg.Units[current_unit[0]][6]
+        speed = cfg.Units[current_unit.name][5]
+        distance = cfg.Units[current_unit.name][6]
 
         location_raw_new, location_col_new = self.get_raw_column(movement)
 
@@ -298,7 +304,7 @@ class Game:
             if not self.can_move(location_raw_new, location_col_new, location_raw, location_col, speed):
                 return Status.lose
             # check that location is free, except case when new and old locations are equal
-            if current_unit[3] != movement and not self.is_free(movement):
+            if current_unit.location != movement and not self.is_free(movement):
                 return Status.lose
 
         # make attack
@@ -306,17 +312,18 @@ class Game:
         if actions[1][defender_location] > 0:
             defender = self.find_unit(defender_location)
             # check that there is unit in defenders location and it is enemy
-            defender_owner = defender[1]
+            defender_owner = defender.owner
             def_raw, def_col = self.get_raw_column(defender_location)
             if defender_owner == -1 or defender_owner == player:
                 return Status.lose
             # check that current unit able to attack defender unit
             if not self.in_range(def_raw, def_col, location_raw_new, location_col_new, distance):
                 return Status.lose
-            a_life, d_life = self.fight(current_unit[-2:], defender[-2:])
+            a_life, d_life = self.fight(current_unit.position, defender.position)
             if a_life < 0 or d_life < 0:
                 raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
-            unit_raw[current_location], self.field_[defender[2]][defender_location] = a_life, d_life
+
+            unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
 
         # make movement if all checks are passed
         unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
@@ -325,7 +332,7 @@ class Game:
         pass
 
     def find_unit(self, location):
-        units = list(filter(lambda x: x[3] != location, self.units_))
+        units = list(filter(lambda x: x.location != location, self.units_))
         if len(units) > 1:
             raise Exception("Founded more then one units in one location")
         if len(units) == 0:
