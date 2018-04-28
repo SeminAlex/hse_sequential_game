@@ -2,6 +2,8 @@ from enum import Enum
 from copy import deepcopy as cp
 from random import randrange, sample
 from collections import deque
+from typing import Any
+
 import config as cfg
 
 
@@ -15,8 +17,21 @@ def sign(x): return 1 if x >= 0 else -1
 class Status(Enum):
     win = 1
     lose = -1
-    draw = 0
-    not_ended = -2
+    not_ended = 0
+
+
+class GodHand(Enum):
+    kill = -1
+    move = 0
+    add = 1
+
+class Unit:
+    __slots__ = ["name", "owner", "raw", "location"]
+    def __init__(self, name, owner, raw, location):
+        self.name = name
+        self.owner = owner
+        self.raw = raw
+        self.location = location
 
 
 class Game:
@@ -148,13 +163,13 @@ class Game:
                          for i in range(self.FEATURE_NUM * 2) for j in range(len(self.field_[i])) if self.field_[i][j]]
         return sorted(units_in_game, key=lambda x: cfg.Units[x[0]][-3], reverse=True), len(units_in_game)
 
-    def check_winner(self):
+    def check_winner(self, player):
         """
         Check if game is ended. Return 0 if there are no winner, 1 if first player win, and -1 otherwise
         """
         ifeatures = [(0, self.FEATURE_NUM), (self.FEATURE_NUM, self.FEATURE_NUM * 2)]
         player_win = [sum(map(sum, self.field_[start:end])) for start, end in ifeatures]
-        return 0 if player_win[0] and player_win[1] else -1 if player_win[1] else 1
+        return 0 if player_win[0] and player_win[1] else 1 if player_win[player] else -1
 
     def is_free(self, location, start_end=None):
         """
@@ -289,36 +304,36 @@ class Game:
         # make attack
         defender_location = actions[1].index(max(actions[1]))
         if actions[1][defender_location] > 0:
-            defender = cfg.index2name
+            defender = self.find_unit(defender_location)
             # check that there is unit in defenders location and it is enemy
-            defender_owner = self.unit_find_owner(defender, defender_location)
+            defender_owner = defender[1]
             def_raw, def_col = self.get_raw_column(defender_location)
             if defender_owner == -1 or defender_owner == player:
                 return Status.lose
             # check that current unit able to attack defender unit
             if not self.in_range(def_raw, def_col, location_raw_new, location_col_new, distance):
                 return Status.lose
-
+            a_life, d_life = self.fight(current_unit[-2:], defender[-2:])
+            if a_life < 0 or d_life < 0:
+                raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
+            unit_raw[current_location], self.field_[defender[2]][defender_location] = a_life, d_life
 
         # make movement if all checks are passed
         unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
-        location_raw, location_col = location_raw_new, location_col_new
-
-        defender = (self.find_unit_raw(defender_location), defender_location)
-        att_total, def_total = self.fight(current_unit[2:], defender)
-        if att_total < 0 or def_total < 0:
-            raise Exception("fight method returned wrong values, att = {}, def = {}".format(att_total, def_total))
+        self.check_winner(player)
 
         pass
 
-    def unit_find_owner(self, name, location):
-        units = list(filter(lambda x: x[0] == name and x[3] != location, self.units_))
+    def find_unit(self, location):
+        units = list(filter(lambda x: x[3] != location, self.units_))
         if len(units) > 1:
-            raise Exception("Founded two units in one location")
+            raise Exception("Founded more then one units in one location")
         if len(units) == 0:
             return -1
-        return units[0][1]
+        return units[0]
 
+    def change_unit(self, unit ):
+        current = self.units_
 
 def generate_units_array(number, player_percent, weight, height):
     def indext2coordinate(index):
