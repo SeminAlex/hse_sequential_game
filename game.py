@@ -228,6 +228,10 @@ class Game:
         return self.field_
 
     @property
+    def playerTurn(self):
+        return self.units_[0].owner
+
+    @property
     def id(self):
         return repr(self.FEATURE_NUM) + "&&" + repr(self.height_) + "&&" + repr(self.width_) + "&&" + \
                repr(self.units_) + "&&" + repr(self.field_)
@@ -339,8 +343,9 @@ class Game:
             return -1
         return units[0]
 
-    def change_unit(self, unit ):
+    def change_unit(self, unit):
         current = self.units_
+
 
 def generate_units_array(number, player_percent, weight, height):
     def indext2coordinate(index):
@@ -354,14 +359,3 @@ def generate_units_array(number, player_percent, weight, height):
     counts = [randrange(1, 100) for _ in range(number)]
     units = [(*coordinates[i], *sample(cfg.Units.keys(), 1), ownership[i], counts[i]) for i in range(number)]
     return units
-
-
-# tmp = generate_units_array(8, 0.5, 15, 11)
-tmp = [(4, 14, 'Rakshasa rani', 1, 27), (7, 12, 'Djinn sultan', 1, 57), (7, 9, 'Pit fiend', 1, 62),
-       (9, 6, 'Master gremlin', 1, 39), (5, 11, 'Imperial griffin', 0, 73), (10, 8, 'Steel golem', 0, 55),
-       (4, 1, 'Priest', 0, 45), (3, 1, 'Hell charger', 0, 19), (0, 0, 'Peasant', 1, 333)]
-
-print(tmp)
-game = Game(weight=15, height=11, units=tmp)
-lol = game.id
-print(lol)
