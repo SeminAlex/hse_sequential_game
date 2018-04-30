@@ -1,3 +1,6 @@
+import numpy as np
+import config
+
 class Node:
     __slots__ = ["state", "playerTurn", "id", "edges"]
 
@@ -10,8 +13,10 @@ class Node:
     def isLeaf(self):
         return not len(self.edges) > 0
 
-class Edge():
+
+class Edge:
     __slots__ = ["id", "inNode", "outNode", "playerTurn", "action", "stats"]
+
     def __init__(self, inNode, outNode, prior, action):
         self.id = inNode.state.id + '|' + outNode.state.id
         self.inNode = inNode
@@ -21,14 +26,15 @@ class Edge():
 
         self.stats = {
             'N': 0,
-            'W': 0,
+            'V': 0,
             'Q': 0,
             'P': prior,
         }
 
 
-class MCTS():
+class MCTS:
     __slots__ = ["root", "tree", "cpuct"]
+
     def __init__(self, root, cpuct):
         self.root = root
         self.tree = {}
@@ -39,9 +45,6 @@ class MCTS():
         return len(self.tree)
 
     def moveToLeaf(self):
-
-        lg.logger_mcts.info('------MOVING TO LEAF------')
-
         breadcrumbs = []
         currentNode = self.root
 
@@ -49,9 +52,6 @@ class MCTS():
         value = 0
 
         while not currentNode.isLeaf():
-
-            lg.logger_mcts.info('PLAYER TURN...%d', currentNode.state.playerTurn)
-
             maxQU = -99999
 
             if currentNode == self.root:
@@ -72,32 +72,19 @@ class MCTS():
                     np.sqrt(Nb) / (1 + edge.stats['N'])
 
                 Q = edge.stats['Q']
-
-                lg.logger_mcts.info(
-                    'action: %d (%d)... N = %d, P = %f, nu = %f, adjP = %f, W = %f, Q = %f, U = %f, Q+U = %f'
-                    , action, action % 7, edge.stats['N'], round(edge.stats['P'], 6), round(nu[idx], 6),
-                    ((1 - epsilon) * edge.stats['P'] + epsilon * nu[idx])
-                    , round(edge.stats['W'], 6), round(Q, 6), round(U, 6), round(Q + U, 6))
-
                 if Q + U > maxQU:
                     maxQU = Q + U
                     simulationAction = action
                     simulationEdge = edge
-
-            lg.logger_mcts.info('action with highest Q + U...%d', simulationAction)
 
             newState, value, done = currentNode.state.takeAction(
                 simulationAction)  # the value of the newState from the POV of the new playerTurn
             currentNode = simulationEdge.outNode
             breadcrumbs.append(simulationEdge)
 
-        lg.logger_mcts.info('DONE...%d', done)
-
         return currentNode, value, done, breadcrumbs
 
     def backFill(self, leaf, value, breadcrumbs):
-        lg.logger_mcts.info('------DOING BACKFILL------')
-
         currentPlayer = leaf.state.playerTurn
 
         for edge in breadcrumbs:
@@ -108,18 +95,8 @@ class MCTS():
                 direction = -1
 
             edge.stats['N'] = edge.stats['N'] + 1
-            edge.stats['W'] = edge.stats['W'] + value * direction
+            edge.stats['V'] = edge.stats['V'] + value * direction
             edge.stats['Q'] = edge.stats['W'] / edge.stats['N']
-
-            lg.logger_mcts.info('updating edge with value %f for player %d... N = %d, W = %f, Q = %f'
-                                , value * direction
-                                , playerTurn
-                                , edge.stats['N']
-                                , edge.stats['W']
-                                , edge.stats['Q']
-                                )
-
-            edge.outNode.state.render(lg.logger_mcts)
 
     def addNode(self, node):
         self.tree[node.id] = node

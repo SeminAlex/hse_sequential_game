@@ -1,3 +1,33 @@
+#### SELF PLAY
+EPISODES = 30
+MCTS_SIMS = 50
+MEMORY_SIZE = 30000
+TURNS_UNTIL_TAU0 = 10  # turn on which it starts playing deterministically
+CPUCT = 1
+EPSILON = 0.2
+ALPHA = 0.8
+
+#### RETRAINING
+BATCH_SIZE = 256
+EPOCHS = 1
+REG_CONST = 0.0001
+LEARNING_RATE = 0.1
+MOMENTUM = 0.9
+TRAINING_LOOPS = 10
+
+HIDDEN_CNN_LAYERS = [
+    {'filters': 75, 'kernel_size': (4, 4)},
+    {'filters': 75, 'kernel_size': (4, 4)},
+    {'filters': 75, 'kernel_size': (4, 4)},
+    {'filters': 75, 'kernel_size': (4, 4)},
+    {'filters': 75, 'kernel_size': (4, 4)},
+    {'filters': 75, 'kernel_size': (4, 4)},
+]
+
+#### EVALUATION
+EVAL_EPISODES = 20
+SCORING_THRESHOLD = 1.3
+
 # Units database, information taken from
 # http://ru.mightandmagic.wikia.com/wiki/Heroes_of_Might_and_Magic_V
 # key - unit name, value - list(attack, defense, damage, life, initiative, speed, range)
@@ -44,12 +74,8 @@ Units = {
 }
 
 attributes = list(["attack", "defense", "damage", "life", "initiative", "speed", "range"])
-name2index = dict(map(lambda x:(x[1], x[0]), enumerate(Units.keys())))
+name2index = dict(map(lambda x: (x[1], x[0]), enumerate(Units.keys())))
 index2name = dict(enumerate(Units.keys()))
-
-
-names = list(name2index.keys())
-tmp = len(names)
 
 for i in Units:
     if len(Units[i]) != len(attributes):

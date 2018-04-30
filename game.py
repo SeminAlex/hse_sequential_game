@@ -39,6 +39,13 @@ class Unit:
     def position(self):
         return self.raw, self.location
 
+    def __eq__(self, other):
+        checker = self.name == other.name and self.owner == self.owner
+        checker = checker and self.raw == other.raw and self.location == other.location
+        if checker:
+            return True
+        return False
+
 
 class Game:
     __slots__ = ["field_", "player_", "units_", "height_", "width_", "FEATURE_NUM", "status", ]
@@ -327,13 +334,18 @@ class Game:
             if a_life < 0 or d_life < 0:
                 raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
 
+            # we need to remove attacker or defender units from queue if their total life is equal to 0
+            if d_life == 0:
+                self.change_unit(defender, GodHand.kill)
+            if a_life == 0:
+                self.change_unit(current_unit, GodHand.kill)
             unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
 
         # make movement if all checks are passed
         unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
-        self.check_winner(player)
-
-        pass
+        self.change_unit(Unit(name=current_unit.name, owner=current_unit.owner, raw=current_unit.raw,
+                              location=movement), GodHand.move)
+        return self.check_winner(player)
 
     def find_unit(self, location):
         units = list(filter(lambda x: x.location != location, self.units_))
@@ -343,8 +355,15 @@ class Game:
             return -1
         return units[0]
 
-    def change_unit(self, unit):
-        current = self.units_
+    def change_unit(self, unit, action):
+        if action == GodHand.kill:
+            self.units_.remove(unit)
+        elif action == GodHand.move:
+            # delete unit from start of queue and add 'unit' to the end
+            self.units_.remove(self.units_[0])
+            self.units_.append(unit)
+        elif action == GodHand.add:
+            self.units_.append(unit)
 
 
 def generate_units_array(number, player_percent, weight, height):
