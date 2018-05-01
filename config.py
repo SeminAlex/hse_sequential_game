@@ -28,6 +28,9 @@ HIDDEN_CNN_LAYERS = [
 EVAL_EPISODES = 20
 SCORING_THRESHOLD = 1.3
 
+run_folder = './run/'
+run_archive_folder = './run_archive/'
+
 # Units database, information taken from
 # http://ru.mightandmagic.wikia.com/wiki/Heroes_of_Might_and_Magic_V
 # key - unit name, value - list(attack, defense, damage, life, initiative, speed, range)

@@ -96,7 +96,7 @@ class MCTS:
 
             edge.stats['N'] = edge.stats['N'] + 1
             edge.stats['V'] = edge.stats['V'] + value * direction
-            edge.stats['Q'] = edge.stats['W'] / edge.stats['N']
+            edge.stats['Q'] = edge.stats['V'] / edge.stats['N']
 
     def addNode(self, node):
         self.tree[node.id] = node
