@@ -69,7 +69,6 @@ class Gen_Model():
                     filter = (filter + 1) % s[3]
 
             except:
--
                 try:
                     fig = plt.figure(figsize=(3, len(x))) # width, height in inches
                     for i in range(len(x)):
@@ -108,13 +107,13 @@ class Residual_CNN(Gen_Model):
         x = self.conv_layer(input_block, filters, kernel_size)
 
         x = Conv2D(
-            filters=filters
-            , kernel_size=kernel_size
-            , data_format="channels_first"
-            , padding='same'
-            , use_bias=False
-            , activation='linear'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
+            filters=filters,
+            kernel_size=kernel_size,
+            data_format="channels_first",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.reg_const)
         )(x)
 
         x = BatchNormalization(axis=1)(x)
@@ -128,13 +127,13 @@ class Residual_CNN(Gen_Model):
     def conv_layer(self, x, filters, kernel_size):
 
         x = Conv2D(
-            filters=filters
-            , kernel_size=kernel_size
-            , data_format="channels_first"
-            , padding='same'
-            , use_bias=False
-            , activation='linear'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
+            filters=filters,
+            kernel_size=kernel_size,
+            data_format="channels_first",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.reg_const)
         )(x)
 
         x = BatchNormalization(axis=1)(x)
@@ -160,25 +159,25 @@ class Residual_CNN(Gen_Model):
         x = Flatten()(x)
 
         x = Dense(
-            20
-            , use_bias=False
-            , activation='linear'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
+            20,
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.reg_const)
         )(x)
 
         x = LeakyReLU()(x)
 
         x = Dense(
-            1
-            , use_bias=False
-            , activation='tanh'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
-            , name='value_head'
+            1,
+            use_bias=False,
+            activation='tanh',
+            kernel_regularizer=regularizers.l2(self.reg_const),
+            name='value_head'
         )(x)
 
         return (x)
 
-    def policy_head(self, x):
+    def policy_head(self, x, name="policy_head"):
 
         x = Conv2D(
             filters=2
@@ -200,7 +199,7 @@ class Residual_CNN(Gen_Model):
             , use_bias=False
             , activation='linear'
             , kernel_regularizer=regularizers.l2(self.reg_const)
-            , name='policy_head'
+            , name=name
         )(x)
 
         return (x)
@@ -216,18 +215,20 @@ class Residual_CNN(Gen_Model):
                 x = self.residual_layer(x, h['filters'], h['kernel_size'])
 
         vh = self.value_head(x)
-        ph = self.policy_head(x)
+        ph = self.policy_head(x, name='policy_head')
+        ah = self.policy_head(x, name='attack_head')
 
-        model = Model(inputs=[main_input], outputs=[vh, ph])
-        model.compile(loss={'value_head': 'mean_squared_error', 'policy_head': softmax_cross_entropy_with_logits},
+        model = Model(inputs=[main_input], outputs=[vh, ph, ah])
+        model.compile(loss={'value_head': 'mean_squared_error', 'policy_head': softmax_cross_entropy_with_logits,
+                            'attack_head': softmax_cross_entropy_with_logits},
                       optimizer=SGD(lr=self.learning_rate, momentum=cfg.MOMENTUM),
-                      loss_weights={'value_head': 0.5, 'policy_head': 0.5}
+                      loss_weights={'value_head': 0.5, 'policy_head': 0.5, 'attack_head': 0.5}
                       )
 
         return model
 
     def convertToModelInput(self, state):
-        inputToModel = state.binary  # np.append(state.binary, [(state.playerTurn + 1)/2] * self.input_dim[1] * self.input_dim[2])
+        inputToModel = state.binary
         inputToModel = np.reshape(inputToModel, self.input_dim)
         return (inputToModel)
 

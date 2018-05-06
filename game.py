@@ -2,7 +2,7 @@ from enum import Enum
 from copy import deepcopy as cp
 from random import randrange, sample
 from collections import deque
-from typing import Any
+import numpy as np
 
 import config as cfg
 
@@ -40,11 +40,16 @@ class Unit:
         return self.raw, self.location
 
     def __eq__(self, other):
+        if type(self) != type(other):
+            return False
         checker = self.name == other.name and self.owner == self.owner
         checker = checker and self.raw == other.raw and self.location == other.location
         if checker:
             return True
         return False
+
+    def __str__(self):
+        return str(list(zip(self.__slots__,[self.name, self.owner,self.raw, self.location])))
 
 
 class Game:
@@ -168,7 +173,7 @@ class Game:
         :param unit:(Unit name, Owner, Raw, Location)
         :return: count of unit at this location
         """
-        return self.field_[unit.raw][unit.location] / cfg.Units[unit.name]
+        return self.field_[unit.raw][unit.location] / cfg.Units[unit.name][3]
 
     def units_sort_(self):
         """ return list of tuples (Unit Name, Owner, raw, location)"""
@@ -245,6 +250,7 @@ class Game:
 
     def from_id(self, identity):
         self.FEATURE_NUM, self.height_, self.width_, self.units_, self.field_ = map(eval, identity.split("&&"))
+        self.fill_actions()
         return self
 
     def __eq__(self, other):
@@ -297,8 +303,9 @@ class Game:
                                                                             movements, second - with attacks
         :return: <int>, 0 if game is not ended, -1 if game is loosed or action is not allowed, 1 if game is wined
         """
+
         actions = [actions[:self.height_ * self.width_], actions[self.height_ * self.width_:]]
-        movement = actions[0].index(max(actions[0]))
+        movement = np.argmax(actions[0])
         current_unit = self.units_[0]  # (Name, Owner, Raw, Location)
         unit_raw = self.field_[current_unit.raw]
         player = current_unit.owner
@@ -313,23 +320,25 @@ class Game:
         if actions[0][movement] > 0:
             # check that unit can move to this location
             if not self.can_move(location_raw_new, location_col_new, location_raw, location_col, speed):
-                return Status.lose
+                return Status.lose, None
             # check that location is free, except case when new and old locations are equal
             if current_unit.location != movement and not self.is_free(movement):
-                return Status.lose
+                return Status.lose, None
 
         # make attack
-        defender_location = actions[1].index(max(actions[1]))
+        defender_location = np.argmax(actions[1])
         if actions[1][defender_location] > 0:
             defender = self.find_unit(defender_location)
+            if defender == -1:
+                return Status.lose, None
             # check that there is unit in defenders location and it is enemy
             defender_owner = defender.owner
             def_raw, def_col = self.get_raw_column(defender_location)
             if defender_owner == -1 or defender_owner == player:
-                return Status.lose
+                return Status.lose, None
             # check that current unit able to attack defender unit
             if not self.in_range(def_raw, def_col, location_raw_new, location_col_new, distance):
-                return Status.lose
+                return Status.lose, None
             a_life, d_life = self.fight(current_unit.position, defender.position)
             if a_life < 0 or d_life < 0:
                 raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
@@ -342,13 +351,18 @@ class Game:
             unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
 
         # make movement if all checks are passed
+        current_id = self.id
         unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
         self.change_unit(Unit(name=current_unit.name, owner=current_unit.owner, raw=current_unit.raw,
                               location=movement), GodHand.move)
-        return self.check_winner(player)
+        self.fill_actions()
+        winner = self.check_winner(player)
+        result = self.id
+        self.from_id(current_id)
+        return winner, result
 
     def find_unit(self, location):
-        units = list(filter(lambda x: x.location != location, self.units_))
+        units = list(filter(lambda x: x.location == location, self.units_))
         if len(units) > 1:
             raise Exception("Founded more then one units in one location")
         if len(units) == 0:
@@ -378,3 +392,35 @@ def generate_units_array(number, player_percent, weight, height):
     counts = [randrange(1, 100) for _ in range(number)]
     units = [(*coordinates[i], *sample(cfg.Units.keys(), 1), ownership[i], counts[i]) for i in range(number)]
     return units
+
+
+# tmp = generate_units_array(8, 0.5, 15, 11)
+tmp = [(4, 14, 'Rakshasa rani', 1, 27), (7, 12, 'Djinn sultan', 1, 57), (7, 9, 'Pit fiend', 1, 62),
+       (9, 6, 'Master gremlin', 1, 39), (5, 11, 'Imperial griffin', 0, 73), (10, 8, 'Steel golem', 0, 55),
+       (4, 1, 'Priest', 0, 45), (3, 1, 'Hell charger', 0, 19), (0, 0, 'Peasant', 1, 333)]
+
+print(tmp)
+game = Game(weight=15, height=11, units=tmp)
+lol = game.id
+
+from numpy.random import random
+test_repetitions = 10000000
+dimen = 15*11*2
+length = 15*11
+test_input = [random(dimen) for _ in range(test_repetitions)]
+
+for test in test_input:
+    tmp = game.take_action(test)
+    if tmp != (Status.lose, None):
+        print('*'*100)
+        print("input = ", end=" ")
+        move = np.argmax(test[:length])
+        attack = np.argmax(test[length:])
+        print(move, attack)
+        print("output = ", end=" ")
+        print(game.take_action(test))
+        print("units = ", end=" ")
+        print([str(i) for i in game.units_])
+
+
+print([str(i) for i in game.units_])
