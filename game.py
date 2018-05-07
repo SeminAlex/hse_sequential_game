@@ -24,16 +24,18 @@ class GodHand(Enum):
     kill = -1
     move = 0
     add = 1
+    next = 2
 
 
 class Unit:
-    __slots__ = ["name", "owner", "raw", "location"]
+    __slots__ = ["name", "owner", "raw", "location", "life"]
 
-    def __init__(self, name, owner, raw, location):
+    def __init__(self, name, owner, raw, location, life):
         self.name = name
         self.owner = owner
         self.raw = raw
         self.location = location
+        self.life = life
 
     @property
     def position(self):
@@ -49,7 +51,10 @@ class Unit:
         return False
 
     def __str__(self):
-        return str(list(zip(self.__slots__,[self.name, self.owner,self.raw, self.location])))
+        return str(list(zip(self.__slots__, [self.name, self.owner, self.raw, self.location])))
+
+    def __repr__(self):
+        return "Unit(name={}, owner={},raw={},location={})".format(repr(self.name), self.owner, self.raw, self.location)
 
 
 class Game:
@@ -168,16 +173,17 @@ class Game:
         column = location - self.width_ * raw
         return raw, column
 
-    def get_count(self, unit):
+    @staticmethod
+    def get_count(unit):
         """
         :param unit:(Unit name, Owner, Raw, Location)
         :return: count of unit at this location
         """
-        return self.field_[unit.raw][unit.location] / cfg.Units[unit.name][3]
+        return unit.life / cfg.Units[unit.name][3]
 
     def units_sort_(self):
-        """ return list of tuples (Unit Name, Owner, raw, location)"""
-        units_in_game = [Unit(cfg.index2name[i % self.FEATURE_NUM], i // self.FEATURE_NUM, i, j)
+        """ return list of tuples (Unit Name, Owner, raw, location, life)"""
+        units_in_game = [Unit(cfg.index2name[i % self.FEATURE_NUM], i // self.FEATURE_NUM, i, j, )
                          for i in range(self.FEATURE_NUM * 2) for j in range(len(self.field_[i])) if self.field_[i][j]]
         return sorted(units_in_game, key=lambda x: cfg.Units[x.name][-3], reverse=True), len(units_in_game)
 
@@ -219,8 +225,7 @@ class Game:
         raw[current], raw[new_location] = raw[new_location], raw[current]
         pass
 
-    @staticmethod
-    def calculate_damage(attacker, att_count, defender):
+    def calculate_damage(self, attacker, att_count, defender):
         """
         calculate damage that unit 'attacker' inflict to 'defender'
         :param attacker: <int> index of unit that attack
@@ -228,8 +233,8 @@ class Game:
         :param defender: <int> index of unit that defence
         :return: <int> number of defeated life
         """
-        attacker_name = cfg.index2name[attacker]
-        defender_name = cfg.index2name[defender]
+        attacker_name = cfg.index2name[attacker % self.FEATURE_NUM]
+        defender_name = cfg.index2name[defender % self.FEATURE_NUM]
         damage = cfg.Units[attacker_name][2]  # get damage
         odds = cfg.Units[attacker_name][0] - cfg.Units[defender_name][1]  # difference between attack and defend
         damage_coeff = (1.0 + 0.1 * sign(odds)) ** abs(odds)  # coefficient of damage
@@ -245,12 +250,12 @@ class Game:
 
     @property
     def id(self):
-        return repr(self.FEATURE_NUM) + "&&" + repr(self.height_) + "&&" + repr(self.width_) + "&&" + \
-               repr(self.units_) + "&&" + repr(self.field_)
+        return repr(self.FEATURE_NUM) + "&&" + repr(self.height_) + "&&" + repr(self.width_) + "&&[" + \
+               ','.join(map(repr, self.units_)) + "]&&" + repr(self.field_)
 
     def from_id(self, identity):
         self.FEATURE_NUM, self.height_, self.width_, self.units_, self.field_ = map(eval, identity.split("&&"))
-        self.fill_actions()
+        self.units_ = deque(self.units_)
         return self
 
     def __eq__(self, other):
@@ -276,7 +281,7 @@ class Game:
 
         # calculate total damage that unit 'defender' inflict to 'attacker'
         attacker_life = self.field_[attacker[0]][attacker[1]]
-        def_count = defender_life / cfg.Units[cfg.index2name[defender[0]]]
+        def_count = defender_life / cfg.Units[cfg.index2name[defender[0] % self.FEATURE_NUM]][3]
         if defender_life != 0:
             damage = self.calculate_damage(defender[0], def_count, attacker[0])
             damage = damage if damage > 1 else 1
@@ -326,8 +331,11 @@ class Game:
                 return Status.lose, None
 
         # make attack
+        a_life, d_life, defender = None, None, None
         defender_location = np.argmax(actions[1])
-        if actions[1][defender_location] > 0:
+        if defender_location == current_unit.location:
+            return Status.lose, None
+        if actions[1][defender_location] != 0:
             defender = self.find_unit(defender_location)
             if defender == -1:
                 return Status.lose, None
@@ -343,21 +351,25 @@ class Game:
             if a_life < 0 or d_life < 0:
                 raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
 
-            # we need to remove attacker or defender units from queue if their total life is equal to 0
-            if d_life == 0:
-                self.change_unit(defender, GodHand.kill)
-            if a_life == 0:
-                self.change_unit(current_unit, GodHand.kill)
-            unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
+
 
         # make movement if all checks are passed
         current_id = self.id
         unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
-        self.change_unit(Unit(name=current_unit.name, owner=current_unit.owner, raw=current_unit.raw,
-                              location=movement), GodHand.move)
-        self.fill_actions()
+        self.change_units(current_unit, GodHand.move, location=movement)
+
+        # we need to remove attacker or defender units from queue if their total life is equal to 0
+        if a_life and d_life and defender:
+            if d_life == 0:
+                self.change_units(defender, GodHand.kill)
+            if a_life == 0:
+                self.change_units(self.units_[0], GodHand.kill)
+            unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
+
+        self.field_[self.FEATURE_NUM*2 + 1:] = self.move_attack_matrix()
         winner = self.check_winner(player)
         result = self.id
+
         self.from_id(current_id)
         return winner, result
 
@@ -369,15 +381,20 @@ class Game:
             return -1
         return units[0]
 
-    def change_unit(self, unit, action):
+    def change_units(self, unit, action, **kwargs):
         if action == GodHand.kill:
             self.units_.remove(unit)
-        elif action == GodHand.move:
+        elif action == GodHand.next:
             # delete unit from start of queue and add 'unit' to the end
             self.units_.remove(self.units_[0])
             self.units_.append(unit)
         elif action == GodHand.add:
             self.units_.append(unit)
+        elif action == GodHand.move:
+            new_location = kwargs["location"]
+            index = self.units_.index(unit)
+            self.units_[index].location = new_location
+
 
 
 def generate_units_array(number, player_percent, weight, height):
@@ -402,25 +419,60 @@ tmp = [(4, 14, 'Rakshasa rani', 1, 27), (7, 12, 'Djinn sultan', 1, 57), (7, 9, '
 print(tmp)
 game = Game(weight=15, height=11, units=tmp)
 lol = game.id
+log = open("logger.log", "w")
 
 from numpy.random import random
-test_repetitions = 10000000
-dimen = 15*11*2
-length = 15*11
-test_input = [random(dimen) for _ in range(test_repetitions)]
-
-for test in test_input:
-    tmp = game.take_action(test)
-    if tmp != (Status.lose, None):
-        print('*'*100)
-        print("input = ", end=" ")
-        move = np.argmax(test[:length])
-        attack = np.argmax(test[length:])
-        print(move, attack)
-        print("output = ", end=" ")
-        print(game.take_action(test))
-        print("units = ", end=" ")
-        print([str(i) for i in game.units_])
 
 
-print([str(i) for i in game.units_])
+def test_one_unit(units, length):
+    locations = [u[-1] for u in units]
+    for i in locations:
+        for movement in range(length):
+            for attack in range(length):
+                if (movement not in locations and attack in locations) or movement == i:
+                    template = "*********input (move: {}, attack: {}), result: {})"
+                else:
+                    template = "input (move: {}, attack: {}), result: {})"
+                inputs = [0] * (length * 2)
+                inputs[movement] = 1
+                inputs[attack + length] = 1
+                result = game.take_action(inputs)
+                print(template.format(str(movement), str(attack), str(result)), file=log)
+
+
+def test_all(units):
+    length = 15 * 11
+    for _ in range(len(units)):
+        print("*" * 75, end="", file=log)
+        print("  " + str(units[0]) + "  ", end="", file=log)
+        print("*" * 75, end="\n", file=log)
+        test_one_unit(units, length)
+        units.append(units[0])
+        units.remove(units[0])
+
+
+test_all(tmp)
+
+# test_repetitions = 10000
+# dimen = 15*11*2
+# length = 15*11
+# test_input = [random(dimen) for _ in range(test_repetitions)]
+
+
+log.close()
+#
+# for test in test_input:
+#     tmp = game.take_action(test)
+#     if tmp != (Status.lose, None):
+#         print('*'*100)
+#         print("input = ", end=" ")
+#         move = np.argmax(test[:length])
+#         attack = np.argmax(test[length:])
+#         print(move, attack)
+#         print("output = ", end=" ")
+#         print(game.take_action(test))
+#         print("units = ", end=" ")
+#         print([str(i) for i in game.units_])
+#
+#
+# print([str(i) for i in game.units_])
