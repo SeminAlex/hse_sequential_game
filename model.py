@@ -1,15 +1,13 @@
 # %matplotlib inline
 
-import config as cfg
-import numpy as np
-
 import matplotlib.pyplot as plt
-
-from keras.models import Sequential, load_model, Model
-from keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
-from keras.optimizers import SGD
+import numpy as np
 from keras import regularizers
+from keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, LeakyReLU, add
+from keras.models import load_model, Model
+from keras.optimizers import SGD
 
+import config as cfg
 from loss import softmax_cross_entropy_with_logits
 
 
@@ -122,7 +120,7 @@ class Residual_CNN(Gen_Model):
 
         x = LeakyReLU()(x)
 
-        return (x)
+        return x
 
     def conv_layer(self, x, filters, kernel_size):
 
@@ -139,7 +137,7 @@ class Residual_CNN(Gen_Model):
         x = BatchNormalization(axis=1)(x)
         x = LeakyReLU()(x)
 
-        return (x)
+        return x
 
     def value_head(self, x):
 
@@ -175,18 +173,18 @@ class Residual_CNN(Gen_Model):
             name='value_head'
         )(x)
 
-        return (x)
+        return x
 
     def policy_head(self, x, name="policy_head"):
 
         x = Conv2D(
-            filters=2
-            , kernel_size=(1, 1)
-            , data_format="channels_first"
-            , padding='same'
-            , use_bias=False
-            , activation='linear'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
+            filters=2,
+            kernel_size=(1, 1),
+            data_format="channels_first",
+            padding='same',
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.reg_const)
         )(x)
 
         x = BatchNormalization(axis=1)(x)
@@ -195,14 +193,14 @@ class Residual_CNN(Gen_Model):
         x = Flatten()(x)
 
         x = Dense(
-            self.output_dim
-            , use_bias=False
-            , activation='linear'
-            , kernel_regularizer=regularizers.l2(self.reg_const)
-            , name=name
+            self.output_dim,
+            use_bias=False,
+            activation='linear',
+            kernel_regularizer=regularizers.l2(self.reg_const),
+            name=name
         )(x)
 
-        return (x)
+        return x
 
     def _build_model(self):
 
