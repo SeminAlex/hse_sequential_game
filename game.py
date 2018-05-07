@@ -1,7 +1,6 @@
 from enum import Enum
-from copy import deepcopy as cp
 from random import randrange, sample
-from collections import deque
+
 import numpy as np
 
 import config as cfg
@@ -51,14 +50,20 @@ class Unit:
         return False
 
     def __str__(self):
-        return str(list(zip(self.__slots__, [self.name, self.owner, self.raw, self.location])))
+        return str(list(zip(self.__slots__, [self.name, self.owner, self.raw, self.location, self.life])))
 
     def __repr__(self):
-        return "Unit(name={}, owner={},raw={},location={})".format(repr(self.name), self.owner, self.raw, self.location)
+        return "Unit(name={}, owner={},raw={},location={}, life={})".format(
+            repr(self.name), self.owner, self.raw, self.location, self.life)
+
+    def __copy__(self):
+        newone = type(self)()
+        newone.__dict__.update(self.__dict__)
+        return newone
 
 
 class Game:
-    __slots__ = ["field_", "player_", "units_", "height_", "width_", "FEATURE_NUM", "status", ]
+    __slots__ = ["player_", "units_", "height_", "width_", "FEATURE_NUM", ]
     """
     field_ - matrix: FEATURE_NUM x (height*width), where each row has length= height*width
               field_[0-(FEATURE_NUM-1)] - integer arrays, K in raw i means, that unit, which name is unit_names[i] is 
@@ -74,24 +79,20 @@ class Game:
     width_        - int variable, shows width of field
     FEATURE_NUM   - int variable, total number of all possible units
     status        - Status variable, can be any value from 'Status' class
-    units_        - (Name <str>, Owner <int>, Raw <int>, Location <int>) array which determinate queue of units turns
+    units_        - Unit object array which determinate queue of units turns
     """
 
-    def __init__(self, height, weight, units=None, field=None):
+    def __init__(self, height, weight, units=None, from_id=False):
         self.height_ = height
         self.width_ = weight
         self.FEATURE_NUM = len(cfg.name2index)
-        self.status = Status.not_ended
-        if field:
-            self.field_ = cp(field)
+        if not from_id:
+            self.__generate_units(units)
         else:
-            self.__generate_field(units)
-        self.units_ = deque(*self.units_sort_())
+            self.units_ = units
 
-    def __generate_field(self, units=None):
-        length = self.width_ * self.height_
-        self.field_ = [_create_zero_line(length) for _ in range(self.FEATURE_NUM * 2 + 3)]
-
+    def __generate_units(self, units=None):
+        self.units_ = list()
         if units:
             if len(units) < 1 or len(units[0]) != 5:
                 raise Exception("ERROR: List of units must contain at least one tuple like " +
@@ -103,56 +104,24 @@ class Game:
                                     .format(unit_name, cfg.Units.keys()))
                 raw = cfg.name2index[unit_name] + self.FEATURE_NUM * player
                 coordinate = x * self.width_ + y
-                self.field_[raw][coordinate] = cfg.Units[unit_name][3] * count
-        return
-
-    def fill_actions(self):
-        """
-        Fill sub-matrix self.field_, beginning from self.FEATURE_NUM*2
-        self.field_[self.FEATURE_NUM * 2] - binary array,  1 means that current unit can move into this location
-        self.field_[FEATURE_NUM*2+j] - binary array, 1 means that current unit can attack enemy in this location if
-                                            current unit made movements in location 'j-1'
-        """
-        unit = self.units_[0]
-        location = unit.location
-        speed = cfg.Units[unit.name][5]
-        diapason = cfg.Units[unit.name][6]
-        raw, column = self.get_raw_column(location)
-        moveRaw = self.FEATURE_NUM * 2
-        raw_length = len(self.field_[0])
-
-        for i in range(raw_length):
-            self.field_[moveRaw][i] = 1 if i == location else 0
-            raw_i, col_i = self.get_raw_column(i)
-
-            if self.is_free(i) and self.can_move(raw_i, col_i, raw, column, speed):
-                self.field_[moveRaw][i] = 1
-
-        # fill attack sub-matrix or create it if it doesn't exist
-        if len(self.field_) <= moveRaw + 1:
-            self.field_[moveRaw + 1:] = self.move_attack_matrix()
-        else:
-            for i in range(raw_length):
-                new_raw, new_col = self.get_raw_column(i)
-                self.field_[i] = [0] * raw_length
-                if self.is_free(i) and self.can_move(new_raw, new_col, raw, column, speed):
-                    for j in range(raw_length):
-                        search_range = (0, self.FEATURE_NUM) if unit.owner else (self.FEATURE_NUM, self.FEATURE_NUM * 2)
-                        if not self.is_free(j, search_range) and self.in_range(*self.get_raw_column(j), new_raw,
-                                                                               new_col, diapason):
-                            self.field_[moveRaw + 1 + i][j] = 1
+                self.units_.append(Unit(name=unit_name,
+                                        owner=player,
+                                        raw=raw,
+                                        location=coordinate,
+                                        life=cfg.Units[unit_name][3] * count))
+            self.units_ = self.units_sort_()
         return
 
     def move_attack_matrix(self):
         def raw_creation(line):
             result = [0] * length
-            raw = line // self.width_
-            column = line - self.width_ * raw
+            raw_tmp = line // self.width_
+            column_tmp = line - self.width_ * raw_tmp
             for i in range(length):
                 raw_i = i // self.width_
                 col_i = i - self.width_ * raw_i
                 if not self.is_free(i, search_range):
-                    if self.in_range(raw_i, col_i, raw, column, diapason):
+                    if self.in_range(raw_i, col_i, raw_tmp, column_tmp, diapason):
                         result[i] = 1
             return result
 
@@ -183,16 +152,14 @@ class Game:
 
     def units_sort_(self):
         """ return list of tuples (Unit Name, Owner, raw, location, life)"""
-        units_in_game = [Unit(cfg.index2name[i % self.FEATURE_NUM], i // self.FEATURE_NUM, i, j, )
-                         for i in range(self.FEATURE_NUM * 2) for j in range(len(self.field_[i])) if self.field_[i][j]]
-        return sorted(units_in_game, key=lambda x: cfg.Units[x.name][-3], reverse=True), len(units_in_game)
+        return sorted(self.units_, key=lambda x: cfg.Units[x.name][-3], reverse=True)
 
     def check_winner(self, player):
         """
         Check if game is ended. Return 0 if there are no winner, 1 if first player win, and -1 otherwise
         """
-        ifeatures = [(0, self.FEATURE_NUM), (self.FEATURE_NUM, self.FEATURE_NUM * 2)]
-        player_win = [sum(map(sum, self.field_[start:end])) for start, end in ifeatures]
+        player_win = [len(list(filter(lambda x: True if x.owner == 0 else False, self.units_))),
+                      len(list(filter(lambda x: True if x.owner == 1 else False, self.units_)))]
         return 0 if player_win[0] and player_win[1] else 1 if player_win[player] else -1
 
     def is_free(self, location, start_end=None):
@@ -202,9 +169,9 @@ class Game:
         :param start_end: <tuple(<int>, <int>)>, indexes of raws for search, default - all possible
         :return: True if no units is found, False otherwise
         """
-        start_end = start_end if start_end else (0, self.FEATURE_NUM * 2)  # indexes for searching
-        for i in range(*start_end):
-            if self.field_[i][location] != 0:
+        start, end = start_end if start_end else (0, self.FEATURE_NUM * 2)  # indexes for searching
+        for unit in self.units_:
+            if start <= unit.raw < end and unit.location == location:
                 return False
         return True
 
@@ -219,11 +186,6 @@ class Game:
         if raw - diapason <= raw_to < raw + diapason and column - diapason <= col_to < column + diapason:
             return True
         return False
-
-    @staticmethod
-    def make_move(raw, current, new_location):
-        raw[current], raw[new_location] = raw[new_location], raw[current]
-        pass
 
     def calculate_damage(self, attacker, att_count, defender):
         """
@@ -242,50 +204,53 @@ class Game:
 
     @property
     def field(self):
-        return self.field_
+        length = self.height_ * self.width_
+        field = [_create_zero_line(length) for _ in range(self.FEATURE_NUM * 2)]
+        field.extend(self.move_attack_matrix())
+        return field
 
     @property
-    def playerTurn(self):
+    def player_turn(self):
         return self.units_[0].owner
 
     @property
     def id(self):
         return repr(self.FEATURE_NUM) + "&&" + repr(self.height_) + "&&" + repr(self.width_) + "&&[" + \
-               ','.join(map(repr, self.units_)) + "]&&" + repr(self.field_)
+               ','.join(map(repr, self.units_)) + "]&&"
 
-    def from_id(self, identity):
-        self.FEATURE_NUM, self.height_, self.width_, self.units_, self.field_ = map(eval, identity.split("&&"))
-        self.units_ = deque(self.units_)
-        return self
+    @staticmethod
+    def from_id(identity):
+        _, height, width, units = map(eval, identity.split("&&"))
+        return Game(height, width, units=units, from_id=True)
 
     def __eq__(self, other):
         if self.FEATURE_NUM != other.FEATURE_NUM or self.height_ != other.height_ or self.width_ != other.width_:
             return False
-        if self.units_ != other.units_ or self.field_ != other.field_:
+        if self.units_ != other.units_:
             return False
         return True
 
     def fight(self, attacker, defender):
         """
         Emulate fight between units 'attacker' and 'defender'
-        :param attacker: (<int> raw, <int> location), number of unit who attack and his position in the field
-        :param defender: (<int> raw, <int> location), number of unit who defends and his position in the field
+        :param attacker: <Unit>, number of unit who attack and his position in the field
+        :param defender: <Unit>, number of unit who defends and his position in the field
         :return: (<int>: 'attacker' unit total life after attack, <int>: 'defender' unit total life after attack )
         """
-        att_count = self.get_count(self.units_[0])
+        att_count = self.get_count(attacker)
         # calculate total damage that unit 'attacker' inflict to 'defender'
-        damage = self.calculate_damage(attacker[0], att_count, defender[0])
+        damage = self.calculate_damage(attacker.raw, att_count, defender.raw)
         damage = damage if damage > 1 else 1
-        defender_life = self.field_[defender[0]][defender[1]] - damage  # total life of 'defender' unit
+        defender_life = defender.life - damage  # total life of 'defender' unit
         defender_life = defender_life if defender_life > 0 else 0  # after 'attacker' attacked
 
         # calculate total damage that unit 'defender' inflict to 'attacker'
-        attacker_life = self.field_[attacker[0]][attacker[1]]
-        def_count = defender_life / cfg.Units[cfg.index2name[defender[0] % self.FEATURE_NUM]][3]
+        attacker_life = attacker.life
+        def_count = defender_life / cfg.Units[defender.name][3]
         if defender_life != 0:
-            damage = self.calculate_damage(defender[0], def_count, attacker[0])
+            damage = self.calculate_damage(defender.raw, def_count, attacker.raw)
             damage = damage if damage > 1 else 1
-            attacker_life = self.field_[attacker[0]][attacker[1]] - damage
+            attacker_life -= damage
             attacker_life = attacker_life if attacker_life > 0 else 0
 
         return attacker_life, defender_life
@@ -311,8 +276,8 @@ class Game:
 
         actions = [actions[:self.height_ * self.width_], actions[self.height_ * self.width_:]]
         movement = np.argmax(actions[0])
-        current_unit = self.units_[0]  # (Name, Owner, Raw, Location)
-        unit_raw = self.field_[current_unit.raw]
+        result_units = self.units_[:]
+        current_unit = result_units[0]
         player = current_unit.owner
         current_location = current_unit.location
         location_raw, location_col = self.get_raw_column(current_location)
@@ -335,9 +300,9 @@ class Game:
         defender_location = np.argmax(actions[1])
         if defender_location == current_unit.location:
             return Status.lose, None
-        if actions[1][defender_location] != 0:
-            defender = self.find_unit(defender_location)
-            if defender == -1:
+        if actions[1][defender_location] > 0:
+            defender = self.find_unit(result_units, defender_location)
+            if not defender:
                 return Status.lose, None
             # check that there is unit in defenders location and it is enemy
             defender_owner = defender.owner
@@ -347,54 +312,49 @@ class Game:
             # check that current unit able to attack defender unit
             if not self.in_range(def_raw, def_col, location_raw_new, location_col_new, distance):
                 return Status.lose, None
-            a_life, d_life = self.fight(current_unit.position, defender.position)
+            a_life, d_life = self.fight(current_unit, defender)
             if a_life < 0 or d_life < 0:
                 raise Exception("fight method returned wrong values, att = {}, def = {}".format(a_life, d_life))
 
-
-
         # make movement if all checks are passed
-        current_id = self.id
-        unit_raw[current_location], unit_raw[movement] = unit_raw[movement], unit_raw[current_location]
-        self.change_units(current_unit, GodHand.move, location=movement)
+        self.change_units(result_units, current_unit, GodHand.move, location=movement)
 
         # we need to remove attacker or defender units from queue if their total life is equal to 0
         if a_life and d_life and defender:
             if d_life == 0:
-                self.change_units(defender, GodHand.kill)
+                self.change_units(result_units, defender, GodHand.kill)
             if a_life == 0:
-                self.change_units(self.units_[0], GodHand.kill)
-            unit_raw[current_location], self.field_[defender.raw][defender_location] = a_life, d_life
-
-        self.field_[self.FEATURE_NUM*2 + 1:] = self.move_attack_matrix()
+                self.change_units(result_units, self.units_[0], GodHand.kill)
+            # make attack if all checks are passed
+            current_unit.life = a_life
+            defender.life = d_life
+        self.change_units(result_units, defender, GodHand.next)
         winner = self.check_winner(player)
-        result = self.id
+        return winner, Game(self.height_, self.width_, result_units, from_id=True)
 
-        self.from_id(current_id)
-        return winner, result
-
-    def find_unit(self, location):
-        units = list(filter(lambda x: x.location == location, self.units_))
+    @staticmethod
+    def find_unit(units, location):
+        units = list(filter(lambda x: x.location == location, units))
         if len(units) > 1:
             raise Exception("Founded more then one units in one location")
         if len(units) == 0:
-            return -1
+            return None
         return units[0]
 
-    def change_units(self, unit, action, **kwargs):
+    @staticmethod
+    def change_units(units_list, unit, action, **kwargs):
         if action == GodHand.kill:
-            self.units_.remove(unit)
+            units_list.remove(unit)
         elif action == GodHand.next:
-            # delete unit from start of queue and add 'unit' to the end
-            self.units_.remove(self.units_[0])
-            self.units_.append(unit)
+            # delete unit from start of queue and add him to the end
+            units_list.remove(units_list[0])
+            units_list.append(unit)
         elif action == GodHand.add:
-            self.units_.append(unit)
+            units_list.append(unit)
         elif action == GodHand.move:
             new_location = kwargs["location"]
-            index = self.units_.index(unit)
-            self.units_[index].location = new_location
-
+            index = units_list.index(unit)
+            units_list[index].location = new_location
 
 
 def generate_units_array(number, player_percent, weight, height):
@@ -411,68 +371,54 @@ def generate_units_array(number, player_percent, weight, height):
     return units
 
 
-# tmp = generate_units_array(8, 0.5, 15, 11)
-tmp = [(4, 14, 'Rakshasa rani', 1, 27), (7, 12, 'Djinn sultan', 1, 57), (7, 9, 'Pit fiend', 1, 62),
-       (9, 6, 'Master gremlin', 1, 39), (5, 11, 'Imperial griffin', 0, 73), (10, 8, 'Steel golem', 0, 55),
-       (4, 1, 'Priest', 0, 45), (3, 1, 'Hell charger', 0, 19), (0, 0, 'Peasant', 1, 333)]
+def main():
+    # tmp = generate_units_array(8, 0.5, 15, 11)
+    tmp = [(4, 14, 'Rakshasa rani', 1, 27), (7, 12, 'Djinn sultan', 1, 57), (7, 9, 'Pit fiend', 1, 62),
+           (9, 6, 'Master gremlin', 1, 39), (5, 11, 'Imperial griffin', 0, 73), (10, 8, 'Steel golem', 0, 55),
+           (4, 1, 'Priest', 0, 45), (3, 1, 'Hell charger', 0, 19), (0, 0, 'Peasant', 1, 333)]
 
-print(tmp)
-game = Game(weight=15, height=11, units=tmp)
-lol = game.id
-log = open("logger.log", "w")
+    game = Game(weight=15, height=11, units=tmp)
+    log = open("logger.log", "w")
 
-from numpy.random import random
+    def test_one_unit(units, length):
+        locations = [u[-1] for u in units]
+        for i in locations:
+            for movement in range(length):
+                for attack in range(length):
+                    if (movement not in locations and attack in locations) or movement == i:
+                        template = "*********input (move: {}, attack: {}), result: {})"
+                    else:
+                        template = "input (move: {}, attack: {}), result: {})"
+                    inputs = [0] * (length * 2)
+                    inputs[movement] = 1
+                    inputs[attack + length] = 1
+                    result = game.take_action(inputs)
+                    print(template.format(str(movement), str(attack), str(result)), file=log)
+
+    def test_all(units):
+        length = 15 * 11
+        for _ in range(len(units)):
+            print("*" * 75, end="", file=log)
+            print("  " + str(units[0]) + "  ", end="", file=log)
+            print("*" * 75, end="\n", file=log)
+            test_one_unit(units, length)
+            units.append(units[0])
+            units.remove(units[0])
+
+    for j in range(5):
+        print(tmp)
+        print("*" * 150, end="\n", file=log)
+        st = str(tmp)
+        seps_len = int(((150 - len(st)) / 2) - 4)
+        print("*" * seps_len, end="  ", file=log)
+        print(st, end="  ", file=log)
+        print("*" * seps_len, end="\n", file=log)
+        print("*" * 150, end="\n", file=log)
+        test_all(tmp)
+        tmp = generate_units_array(15 + j * 2, 0.5, 15, 11)
+
+    log.close()
 
 
-def test_one_unit(units, length):
-    locations = [u[-1] for u in units]
-    for i in locations:
-        for movement in range(length):
-            for attack in range(length):
-                if (movement not in locations and attack in locations) or movement == i:
-                    template = "*********input (move: {}, attack: {}), result: {})"
-                else:
-                    template = "input (move: {}, attack: {}), result: {})"
-                inputs = [0] * (length * 2)
-                inputs[movement] = 1
-                inputs[attack + length] = 1
-                result = game.take_action(inputs)
-                print(template.format(str(movement), str(attack), str(result)), file=log)
-
-
-def test_all(units):
-    length = 15 * 11
-    for _ in range(len(units)):
-        print("*" * 75, end="", file=log)
-        print("  " + str(units[0]) + "  ", end="", file=log)
-        print("*" * 75, end="\n", file=log)
-        test_one_unit(units, length)
-        units.append(units[0])
-        units.remove(units[0])
-
-
-test_all(tmp)
-
-# test_repetitions = 10000
-# dimen = 15*11*2
-# length = 15*11
-# test_input = [random(dimen) for _ in range(test_repetitions)]
-
-
-log.close()
-#
-# for test in test_input:
-#     tmp = game.take_action(test)
-#     if tmp != (Status.lose, None):
-#         print('*'*100)
-#         print("input = ", end=" ")
-#         move = np.argmax(test[:length])
-#         attack = np.argmax(test[length:])
-#         print(move, attack)
-#         print("output = ", end=" ")
-#         print(game.take_action(test))
-#         print("units = ", end=" ")
-#         print([str(i) for i in game.units_])
-#
-#
-# print([str(i) for i in game.units_])
+if __name__ == "__main__":
+    main()
